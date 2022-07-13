@@ -3,15 +3,32 @@
     <title>Video Guestbook</title>
     <style>
     * { margin: 0; }
+    body {
+        font-family: "Open Sans";
+    }
     .fullscreen #main, .fullscreen video {
         width: 100%;
         height: 100%;
     }
+    #main {
+        position: relative;
+    }
+    #overlay {
+        position: absolute;
+        height: 2em;
+        width: 100%;
+        color: white;
+        text-align: center;
+        font-size: 72;
+    }
     </style>
 </head>
 <body>
+    <div>
     <div id="main">
+    <div id="overlay">HELLO</div>
     <video autoplay muted></video>
+    </div>
     </div>
 
     <button onclick="document.querySelector('#main').requestFullscreen().then(function(_) {document.querySelector('#main').classList.add('fullscreen')});">hi</button>
@@ -19,28 +36,46 @@
     <script language="javascript" type="text/javascript">
         "use strict";
 
+        const server = "http://192.168.1.117:8080/recording";
+
         let webcamstream;
-        let recorder = null;
+        let recorder;
+
+        let state = 'idle';
+
+        const overlay = document.querySelector('#overlay');
 
         window.addEventListener('keydown', function(e) {
-            e.preventDefault();
             if (e.code == 'Space') {
-                if (recorder == null) {
+                e.preventDefault();
+                if (state == 'idle') {
                     recorder = new MediaRecorder(webcamstream, {
                         videoBitsPerSecond: 10000000,
                     });
                     recorder.ondataavailable = function(e) {
                         let data = e.data;
-                        let link = document.createElement('a');
-                        link.href = URL.createObjectURL(data);
-                        link.download = 'asdf.webm';
-                        link.click();
+                        let xhr = new XMLHttpRequest();
+                        overlay.textContent = 'Saving...';
+                        xhr.open('POST', server);
+                        xhr.onreadystatechange = function() {
+                            if (this.readyState != XMLHttpRequest.DONE) { return; }
+                            state = 'idle';
+                            overlay.textContent = 'Done';
+                        };
+                        xhr.send(data);
+                        //let link = document.createElement('a');
+                        //link.href = URL.createObjectURL(data);
+                        //link.download = 'asdf.webm';
+                        //link.click();
                         console.log(e);
                     };
                     recorder.start();
-                } else {
+                    state = 'record';
+                    overlay.textContent = 'Recording';
+                } else if (state == 'record') {
                     recorder.stop();
                     recorder = null;
+                    state = 'save';
                 }
             }
         });
