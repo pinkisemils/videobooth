@@ -1,0 +1,13 @@
+[package]
+name = "videobooth"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+warp = "0.3.2"
+chrono = "0.4"
+bytes = "1.1"
+tokio-stream = "0.1.1"
+tokio = { version = "1", features = [ "full", "macros", "rt-multi-thread", "io-util" ] }
