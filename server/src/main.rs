@@ -41,6 +41,7 @@ async fn handle_recording(
     mut bytes: impl Stream<Item = Result<impl Buf, warp::Error>> + Unpin,
 ) -> Result<impl Reply, Rejection> {
     let now = chrono::Utc::now().naive_utc().timestamp_millis();
+    println!("Receiving a video file for {}", now);
     let rejection = |err: std::io::Error| {
         println!("failed to do I/O: {}", err);
         warp::reject()
@@ -63,6 +64,8 @@ async fn handle_recording(
     }
     buf_writer.flush().await.map_err(io_rejection)?;
     file.sync_all().await.map_err(io_rejection)?;
+
+    println!("Video '{}' saved", fname);
 
     Ok(warp::reply())
 }
