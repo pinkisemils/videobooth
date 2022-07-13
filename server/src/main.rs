@@ -1,6 +1,6 @@
 use bytes::Buf;
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt; // for write_all()
+use tokio::io::{AsyncWriteExt};
 use tokio_stream::StreamExt;
 use warp::{self, Filter, Rejection, Reply, Stream};
 
@@ -14,9 +14,26 @@ async fn main() {
         .and(warp::filters::body::stream())
         .and_then(handle_recording);
 
-    warp::serve(receiver)
-        .run("0.0.0.0:8080".parse::<std::net::SocketAddr>().unwrap())
+    let index = warp::filters::path::end()
+        .and(warp::filters::method::get())
+        .and_then(index);
+
+    warp::serve(receiver.or(index))
+        .run("127.0.0.1:8080".parse::<std::net::SocketAddr>().unwrap())
         .await;
+}
+
+async fn index() -> Result<impl Reply, Rejection> {
+    Ok(warp::reply::html(
+        tokio::fs::read("../index.html")
+            .await
+            .map_err(io_rejection)?,
+    ))
+}
+
+fn io_rejection(err: std::io::Error) -> Rejection {
+    println!("Failed to read from received body {err}");
+    warp::reject()
 }
 
 async fn handle_recording(
@@ -43,8 +60,8 @@ async fn handle_recording(
             .await
             .map_err(rejection)?;
     }
-    buf_writer.flush().await.map_err(rejection)?;
-    file.sync_all().await.map_err(rejection)?;
+    buf_writer.flush().await.map_err(io_rejection)?;
+    file.sync_all().await.map_err(io_rejection)?;
 
     Ok(warp::reply())
 }
