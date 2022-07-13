@@ -3,7 +3,7 @@
     <title>Video Guestbook</title>
     <style>
     * { margin: 0; }
-    #main, video {
+    .fullscreen #main, .fullscreen video {
         width: 100%;
         height: 100%;
     }
@@ -11,16 +11,43 @@
 </head>
 <body>
     <div id="main">
-    <video autoplay></video>
+    <video autoplay muted></video>
     </div>
 
-    <button onclick="document.querySelector('#main').requestFullscreen();">hi</button>
+    <button onclick="document.querySelector('#main').requestFullscreen().then(function(_) {document.querySelector('#main').classList.add('fullscreen')});">hi</button>
 
     <script language="javascript" type="text/javascript">
         "use strict";
 
+        let webcamstream;
+        let recorder = null;
+
+        window.addEventListener('keydown', function(e) {
+            e.preventDefault();
+            if (e.code == 'Space') {
+                if (recorder == null) {
+                    recorder = new MediaRecorder(webcamstream, {
+                        videoBitsPerSecond: 10000000,
+                    });
+                    recorder.ondataavailable = function(e) {
+                        let data = e.data;
+                        let link = document.createElement('a');
+                        link.href = URL.createObjectURL(data);
+                        link.download = 'asdf.webm';
+                        link.click();
+                        console.log(e);
+                    };
+                    recorder.start();
+                } else {
+                    recorder.stop();
+                    recorder = null;
+                }
+            }
+        });
+
         navigator.getUserMedia({audio: true, video: true}, function(stream) {
-            var video = document.querySelector('video');
+            let video = document.querySelector('video');
+            webcamstream = stream;
             video.srcObject = stream;
             //video.onloadedmetadata = function(e) {
             //    video.play();
