@@ -1,12 +1,11 @@
 use bytes::Buf;
 use tokio::fs::File;
-use tokio::io::{AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
 use warp::{self, Filter, Rejection, Reply, Stream};
 
 #[tokio::main]
 async fn main() {
-    println!("Hello, world!");
 
     let receiver = warp::path!("recording")
         .and(warp::filters::path::end())
@@ -17,6 +16,8 @@ async fn main() {
     let index = warp::filters::path::end()
         .and(warp::filters::method::get())
         .and_then(index);
+
+    println!("Serving the video guest book booth");
 
     warp::serve(receiver.or(index))
         .run("127.0.0.1:8080".parse::<std::net::SocketAddr>().unwrap())
@@ -32,7 +33,7 @@ async fn index() -> Result<impl Reply, Rejection> {
 }
 
 fn io_rejection(err: std::io::Error) -> Rejection {
-    println!("Failed to read from received body {err}");
+    println!("Failed to read from received body {}", err);
     warp::reject()
 }
 
@@ -41,10 +42,10 @@ async fn handle_recording(
 ) -> Result<impl Reply, Rejection> {
     let now = chrono::Utc::now().naive_utc().timestamp_millis();
     let rejection = |err: std::io::Error| {
-        println!("failed to do I/O: {err}");
+        println!("failed to do I/O: {}", err);
         warp::reject()
     };
-    let fname = format!("{now}.webm");
+    let fname = format!("{}.webm", now);
     let mut file = File::create(&fname).await.map_err(rejection)?;
     let mut buf_writer = tokio::io::BufWriter::new(&mut file);
     while let Some(bytes) = bytes.next().await {
@@ -52,7 +53,7 @@ async fn handle_recording(
             .write_all(
                 &bytes
                     .map_err(|err| {
-                        println!("Failed to read from received body {err}");
+                        println!("Failed to read from received body {}", err);
                         warp::reject()
                     })?
                     .chunk(),
