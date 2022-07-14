@@ -2,7 +2,7 @@
 <head>
     <title>Video Guestbook</title>
     <style>
-    * { margin: 0; }
+    * { margin: 0; cursor: none; }
     body {
         font-family: "Open Sans";
     }
@@ -66,6 +66,9 @@
             </circle>
             <text x="200" y="100"/>
         </g>
+        <g id="warmup">
+            <text x="100" y="100"/>
+        <g>
     </svg>
     </div>
     <video autoplay muted></video>
@@ -77,9 +80,11 @@
 "use strict";
 
 const TIME_LIMIT = 30;
+const WARMUP = 3;
 const IDLE_MESSAGE = "Press the button to record\nSpiediet pogu lai ierakstītu";
-const REC_MESSAGE = "Recording\n \nPress again to stop\nSpiediet atkal lai beigtu ierakstīt";
+const REC_MESSAGE = " \n \nPress again to finish recording\nSpiediet atkal lai beigtu ierakstīt";
 const OK_MESSAGE = "Your message has been saved\nJūsu videoieraksts ir saglabāts";
+const WARMUP_MESSAGE = "";
 
 
 const server = "/recording";
@@ -98,11 +103,15 @@ const footer2 = document.querySelector('#footer-text-2');
 const recordingIndicator = document.querySelector('#recording');
 const recordingAnimation = document.querySelector('#recording animate');
 const recordingTimer = document.querySelector('#recording text');
+const warmupTimer = document.querySelector('#warmup text');
 
 const websocket = new WebSocket(ws_path);
 
 let recordingTime;
+let recordingInterval;
 let messageTimeout;
+let warmupTime;
+let warmupInterval;
 
 setMessage(IDLE_MESSAGE);
 
@@ -119,34 +128,24 @@ window.addEventListener('keydown', function(e) {
 
 function buttonPressed() {
     if (state == 'idle') {
-        recorder = new MediaRecorder(webcamstream, {
-            videoBitsPerSecond: 10000000,
-        });
-        recorder.ondataavailable = function(e) {
-            let data = e.data;
-            let xhr = new XMLHttpRequest();
-            xhr.open('POST', server);
-            xhr.onreadystatechange = function() {
-                if (this.readyState != XMLHttpRequest.DONE) { return; }
-                state = 'idle';
-                setMessage(OK_MESSAGE);
-                setMessageLater(IDLE_MESSAGE, 4000);
-            };
-            xhr.send(data);
-            //let link = document.createElement('a');
-            //link.href = URL.createObjectURL(data);
-            //link.download = 'asdf.webm';
-            //link.click();
-            console.log(e);
-        };
-        recorder.start();
-        state = 'record';
-        recordingTime = TIME_LIMIT;
-        updateRecordingTimer();
-        recordingTime += 1;
-        setMessage(REC_MESSAGE);
-        recordingIndicator.style.display = 'inline';
-        recordingAnimation.beginElement();
+        if (WARMUP < 1) {
+            startRecording();
+        } else {
+            state = 'warmup';
+            warmupTime = WARMUP;
+            warmupInterval = setInterval(function() {
+                warmupTime -= 1;
+                updateWarmupTimer();
+                if (warmupTime < 1) {
+                    clearInterval(warmupInterval);
+                    warmupTimer.style.display = 'none';
+                    startRecording();
+                }
+            }, 1000);
+            updateWarmupTimer();
+            warmupTimer.style.display = 'inline';
+            setMessage(WARMUP_MESSAGE);
+        }
     } else if (state == 'record') {
         stopRecording();
     }
@@ -176,9 +175,55 @@ function setMessageLater(m, t)
     }, t);
 }
 
+function startRecording() {
+    warmupTimer.textContent = '';
+    recorder = new MediaRecorder(webcamstream, {
+        videoBitsPerSecond: 10000000,
+    });
+    recorder.ondataavailable = function(e) {
+        let data = e.data;
+        let xhr = new XMLHttpRequest();
+        xhr.open('POST', server);
+        xhr.onreadystatechange = function() {
+            if (this.readyState != XMLHttpRequest.DONE) { return; }
+            state = 'idle';
+            setMessage(OK_MESSAGE);
+            setMessageLater(IDLE_MESSAGE, 4000);
+        };
+        xhr.send(data);
+        //let link = document.createElement('a');
+        //link.href = URL.createObjectURL(data);
+        //link.download = 'asdf.webm';
+        //link.click();
+        console.log(e);
+    };
+    recorder.start();
+    state = 'record';
+    recordingTime = TIME_LIMIT;
+    updateRecordingTimer();
+    setMessage(REC_MESSAGE);
+    recordingIndicator.style.display = 'inline';
+    recordingAnimation.beginElement();
+    recordingInterval = setInterval(function() {
+        recordingTime -= 1;
+        updateRecordingTimer();
+        if (recordingTime < 1) {
+            stopRecording();
+        }
+    }, 1000);
+}
+
 function stopRecording()
 {
+    clearInterval(recordingInterval);
     recorder.stop();
+    if (TIME_LIMIT - recordingTime < 1) {
+        recorder.ondataavailable = function(e) {
+            console.log('skip due to short time');
+            state = 'idle';
+            setMessage(IDLE_MESSAGE);
+        };
+    }
     recorder = null;
     recordingIndicator.style.display = 'none';
     state = 'save';
@@ -189,15 +234,10 @@ function updateRecordingTimer()
     recordingTimer.style.fill = recordingTime > 15 ? 'white' : 'red';
     recordingTimer.textContent = `${Math.floor(recordingTime / 60)}:${String(recordingTime % 60).padStart(2, '0')}`;
 }
-
-window.setInterval(function() {
-    if (state != 'record') { return; }
-    recordingTime -= 1;
-    updateRecordingTimer();
-    if (recordingTime < 1) {
-        stopRecording();
-    }
-}, 1000);
+function updateWarmupTimer()
+{
+    warmupTimer.textContent = `${Math.floor(warmupTime / 60)}:${String(warmupTime % 60).padStart(2, '0')}`;
+}
 
 document.querySelector('#main').onclick = function(e) {
     document.querySelector('#main').requestFullscreen();
