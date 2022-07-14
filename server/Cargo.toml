@@ -9,5 +9,6 @@ edition = "2021"
 warp = "0.3.2"
 chrono = "0.4"
 bytes = "1.1"
-tokio-stream = "0.1.1"
+tokio-stream = { version = "0.1.1", features = [ "sync" ] }
 tokio = { version = "1", features = [ "full", "macros", "rt-multi-thread", "io-util" ] }
+futures = "0.3"
