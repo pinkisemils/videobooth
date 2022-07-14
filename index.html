@@ -38,7 +38,7 @@
         stroke-width: 5px;
         dominant-baseline: central;
     }
-    #overlay-text {
+    #overlay-text, #overlay-text-2, #footer-text, #footer-text-2 {
         text-anchor: middle;
     }
     #recording {
@@ -57,6 +57,9 @@
     <!-- the embedded SVG has a coordinate system of 1600x900 which is scaled up -->
     <svg viewBox="0 0 1600 900" pointer-events="none">
         <text x="800" y="100" id="overlay-text"></text>
+        <text x="800" y="220" id="overlay-text-2"></text>
+        <text x="800" y="680" id="footer-text"></text>
+        <text x="800" y="800" id="footer-text-2"></text>
         <g id="recording">
             <circle cx="100" cy="100" r="45">
                 <animate attributeName="opacity" dur="1s" values="100;0" calcMode="discrete" repeatCount="indefinite"/>
@@ -74,12 +77,13 @@
 "use strict";
 
 const TIME_LIMIT = 30;
-const IDLE_MESSAGE = "Press Space to record";
-const REC_MESSAGE = "Recording";
-const OK_MESSAGE = "Your recording has been saved";
+const IDLE_MESSAGE = "Press the button to record\nSpiediet pogu lai ierakstītu";
+const REC_MESSAGE = "Recording\n \nPress again to stop\nSpiediet atkal lai beigtu ierakstīt";
+const OK_MESSAGE = "Your message has been saved\nJūsu videoieraksts ir saglabāts";
 
 
 const server = "/recording";
+const ws_path = "ws://events";
 
 let webcamstream;
 let recorder;
@@ -87,50 +91,89 @@ let recorder;
 let state = 'idle';
 
 const overlay = document.querySelector('#overlay-text');
+const overlay2 = document.querySelector('#overlay-text-2');
+const footer = document.querySelector('#footer-text');
+const footer2 = document.querySelector('#footer-text-2');
 const recordingIndicator = document.querySelector('#recording');
 const recordingAnimation = document.querySelector('#recording animate');
 const recordingTimer = document.querySelector('#recording text');
 
-let recordingTime;
+const websocket = new WebSocket(ws_path);
 
-overlay.textContent = IDLE_MESSAGE;
+let recordingTime;
+let messageTimeout;
+
+setMessage(IDLE_MESSAGE);
+
+websocket.addEventListener('message', function(e) {
+    buttonPressed();
+});
 
 window.addEventListener('keydown', function(e) {
     if (e.code == 'Space') {
         e.preventDefault();
-        if (state == 'idle') {
-            recorder = new MediaRecorder(webcamstream, {
-                videoBitsPerSecond: 10000000,
-            });
-            recorder.ondataavailable = function(e) {
-                let data = e.data;
-                let xhr = new XMLHttpRequest();
-                xhr.open('POST', server);
-                xhr.onreadystatechange = function() {
-                    if (this.readyState != XMLHttpRequest.DONE) { return; }
-                    state = 'idle';
-                    overlay.textContent = OK_MESSAGE;
-                };
-                xhr.send(data);
-                //let link = document.createElement('a');
-                //link.href = URL.createObjectURL(data);
-                //link.download = 'asdf.webm';
-                //link.click();
-                console.log(e);
-            };
-            recorder.start();
-            state = 'record';
-            recordingTime = TIME_LIMIT;
-            updateRecordingTimer();
-            recordingTime += 1;
-            overlay.textContent = REC_MESSAGE;
-            recordingIndicator.style.display = 'inline';
-            recordingAnimation.beginElement();
-        } else if (state == 'record') {
-            stopRecording();
-        }
+        buttonPressed();
     }
 });
+
+function buttonPressed() {
+    if (state == 'idle') {
+        recorder = new MediaRecorder(webcamstream, {
+            videoBitsPerSecond: 10000000,
+        });
+        recorder.ondataavailable = function(e) {
+            let data = e.data;
+            let xhr = new XMLHttpRequest();
+            xhr.open('POST', server);
+            xhr.onreadystatechange = function() {
+                if (this.readyState != XMLHttpRequest.DONE) { return; }
+                state = 'idle';
+                setMessage(OK_MESSAGE);
+                setMessageLater(IDLE_MESSAGE, 4000);
+            };
+            xhr.send(data);
+            //let link = document.createElement('a');
+            //link.href = URL.createObjectURL(data);
+            //link.download = 'asdf.webm';
+            //link.click();
+            console.log(e);
+        };
+        recorder.start();
+        state = 'record';
+        recordingTime = TIME_LIMIT;
+        updateRecordingTimer();
+        recordingTime += 1;
+        setMessage(REC_MESSAGE);
+        recordingIndicator.style.display = 'inline';
+        recordingAnimation.beginElement();
+    } else if (state == 'record') {
+        stopRecording();
+    }
+}
+
+function setMessage(m)
+{
+    var ma = m.split('\n');
+    overlay.textContent = ma[0];
+    overlay2.textContent = ma?.[1];
+    footer.textContent = ma?.[2];
+    footer2.textContent = ma?.[3];
+    if (messageTimeout != null) {
+        clearTimeout(messageTimeout);
+        messageTimeout = null;
+    }
+}
+
+function setMessageLater(m, t)
+{
+    if (messageTimeout != null) {
+        clearTimeout(messageTimeout);
+    }
+    messageTimeout = setTimeout(function() {
+        messageTimeout = null;
+        setMessage(m);
+    }, t);
+}
 
 function stopRecording()
 {
