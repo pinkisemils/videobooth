@@ -7,6 +7,11 @@ use warp::{self, Filter, Rejection, Reply, Stream};
 
 #[tokio::main]
 async fn main() {
+    let index_path = std::env::args()
+        .skip(1)
+        .next()
+        .expect("First argument must be path to index file");
+
     let (button_tx, _button_rx) = tokio::sync::broadcast::channel(1);
     let event_tx = button_tx.clone();
     tokio::spawn(async move {
@@ -30,6 +35,9 @@ async fn main() {
 
     let index = warp::filters::path::end()
         .and(warp::filters::method::get())
+        .and(warp::any().map(move || {
+            index_path.clone()
+        }))
         .and_then(index);
 
     let events = warp::path!("events")
@@ -74,9 +82,9 @@ async fn main() {
         .await;
 }
 
-async fn index() -> Result<impl Reply, Rejection> {
+async fn index(path: String) -> Result<impl Reply, Rejection> {
     Ok(warp::reply::html(
-        tokio::fs::read("../index.html")
+        tokio::fs::read(&path)
             .await
             .map_err(io_rejection)?,
     ))
