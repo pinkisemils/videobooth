@@ -6,88 +6,167 @@
     body {
         font-family: "Open Sans";
     }
-    .fullscreen #main, .fullscreen video {
+    video {
+        height: 20em;
+    }
+    #main, video {
         width: 100%;
         height: 100%;
     }
-    #main {
+    #main video {
+        -webkit-transform:rotateY(180deg);
+        z-index: -100;
+    }
+    #main, video {
         position: relative;
     }
     #overlay {
         position: absolute;
-        height: 2em;
+        height: 100%;
         width: 100%;
-        color: white;
-        text-align: center;
-        font-size: 72;
+        pointer-events: none;
+    }
+    #overlay svg {
+        max-width: 100vw;
+        max-height: 100vh;
+    }
+    #overlay text {
+        fill: white;
+        font-size: 100px;
+        paint-order: stroke fill;
+        stroke: black;
+        stroke-width: 5px;
+        dominant-baseline: central;
+    }
+    #overlay-text {
+        text-anchor: middle;
+    }
+    #recording {
+        display: none;
+    }
+    #recording circle {
+        fill: red;
+        stroke-width: 0;
     }
     </style>
 </head>
 <body>
     <div>
     <div id="main">
-    <div id="overlay">HELLO</div>
+    <div id="overlay">
+    <!-- the embedded SVG has a coordinate system of 1600x900 which is scaled up -->
+    <svg viewBox="0 0 1600 900" pointer-events="none">
+        <text x="800" y="100" id="overlay-text"></text>
+        <g id="recording">
+            <circle cx="100" cy="100" r="45">
+                <animate attributeName="opacity" dur="1s" values="100;0" calcMode="discrete" repeatCount="indefinite"/>
+            </circle>
+            <text x="200" y="100"/>
+        </g>
+    </svg>
+    </div>
     <video autoplay muted></video>
     </div>
     </div>
 
-    <button onclick="document.querySelector('#main').requestFullscreen().then(function(_) {document.querySelector('#main').classList.add('fullscreen')});">hi</button>
 
     <script language="javascript" type="text/javascript">
-        "use strict";
+"use strict";
 
-        const server = "/recording";
+const TIME_LIMIT = 30;
+const IDLE_MESSAGE = "Press Space to record";
+const REC_MESSAGE = "Recording";
+const OK_MESSAGE = "Your recording has been saved";
 
-        let webcamstream;
-        let recorder;
 
-        let state = 'idle';
+const server = "/recording";
 
-        const overlay = document.querySelector('#overlay');
+let webcamstream;
+let recorder;
 
-        window.addEventListener('keydown', function(e) {
-            if (e.code == 'Space') {
-                e.preventDefault();
-                if (state == 'idle') {
-                    recorder = new MediaRecorder(webcamstream, {
-                        videoBitsPerSecond: 10000000,
-                    });
-                    recorder.ondataavailable = function(e) {
-                        let data = e.data;
-                        let xhr = new XMLHttpRequest();
-                        overlay.textContent = 'Saving...';
-                        xhr.open('POST', server);
-                        xhr.onreadystatechange = function() {
-                            if (this.readyState != XMLHttpRequest.DONE) { return; }
-                            state = 'idle';
-                            overlay.textContent = 'Done';
-                        };
-                        xhr.send(data);
-                        //let link = document.createElement('a');
-                        //link.href = URL.createObjectURL(data);
-                        //link.download = 'asdf.webm';
-                        //link.click();
-                        console.log(e);
-                    };
-                    recorder.start();
-                    state = 'record';
-                    overlay.textContent = 'Recording';
-                } else if (state == 'record') {
-                    recorder.stop();
-                    recorder = null;
-                    state = 'save';
-                }
-            }
-        });
+let state = 'idle';
 
-        navigator.getUserMedia({audio: true, video: true}, function(stream) {
-            let video = document.querySelector('video');
-            webcamstream = stream;
-            video.srcObject = stream;
-            //video.onloadedmetadata = function(e) {
-            //    video.play();
-            //}
-        }, function(e) { console.log(e); });
+const overlay = document.querySelector('#overlay-text');
+const recordingIndicator = document.querySelector('#recording');
+const recordingAnimation = document.querySelector('#recording animate');
+const recordingTimer = document.querySelector('#recording text');
+
+let recordingTime;
+
+overlay.textContent = IDLE_MESSAGE;
+
+window.addEventListener('keydown', function(e) {
+    if (e.code == 'Space') {
+        e.preventDefault();
+        if (state == 'idle') {
+            recorder = new MediaRecorder(webcamstream, {
+                videoBitsPerSecond: 10000000,
+            });
+            recorder.ondataavailable = function(e) {
+                let data = e.data;
+                let xhr = new XMLHttpRequest();
+                xhr.open('POST', server);
+                xhr.onreadystatechange = function() {
+                    if (this.readyState != XMLHttpRequest.DONE) { return; }
+                    state = 'idle';
+                    overlay.textContent = OK_MESSAGE;
+                };
+                xhr.send(data);
+                //let link = document.createElement('a');
+                //link.href = URL.createObjectURL(data);
+                //link.download = 'asdf.webm';
+                //link.click();
+                console.log(e);
+            };
+            recorder.start();
+            state = 'record';
+            recordingTime = TIME_LIMIT;
+            updateRecordingTimer();
+            recordingTime += 1;
+            overlay.textContent = REC_MESSAGE;
+            recordingIndicator.style.display = 'inline';
+            recordingAnimation.beginElement();
+        } else if (state == 'record') {
+            stopRecording();
+        }
+    }
+});
+
+function stopRecording()
+{
+    recorder.stop();
+    recorder = null;
+    recordingIndicator.style.display = 'none';
+    state = 'save';
+}
+
+function updateRecordingTimer()
+{
+    recordingTimer.style.fill = recordingTime > 15 ? 'white' : 'red';
+    recordingTimer.textContent = `${Math.floor(recordingTime / 60)}:${String(recordingTime % 60).padStart(2, '0')}`;
+}
+
+window.setInterval(function() {
+    if (state != 'record') { return; }
+    recordingTime -= 1;
+    updateRecordingTimer();
+    if (recordingTime < 1) {
+        stopRecording();
+    }
+}, 1000);
+
+document.querySelector('#main').onclick = function(e) {
+    document.querySelector('#main').requestFullscreen();
+};
+
+navigator.getUserMedia({audio: true, video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } } }, function(stream) {
+    let video = document.querySelector('video');
+    webcamstream = stream;
+    video.srcObject = stream;
+    //video.onloadedmetadata = function(e) {
+    //    video.play();
+    //}
+}, function(e) { console.log(e); });
     </script>
 </
 body>
