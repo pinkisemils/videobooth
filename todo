@@ -1,0 +1,5 @@
+go back to saying press space to record after a bit
+DONE: show a recording symbol and countdown timer
+connect to a websocket server to get button events
+stretch goal: remotely back up videos
+stretch goal: countdown timer before starting the recording
