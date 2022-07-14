@@ -17,6 +17,7 @@ async fn main() {
         // Take a stream of lines from this
         let mut lines = reader.lines();
         while let Ok(Some(_next_line)) = lines.next_line().await {
+            println!("Sending button press");
             let _ = button_tx.send(true);
         }
     });
