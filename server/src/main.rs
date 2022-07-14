@@ -42,6 +42,7 @@ async fn main() {
                     tokio_stream::wrappers::BroadcastStream::new(event_tx.subscribe()).fuse();
                 Result::<_, Rejection>::Ok(ws.on_upgrade(move |ws| async move {
                     let mut ws = ws.fuse();
+                    loop {
                     futures::select! {
                         btn = socket_rx.select_next_some() => {
                             if btn == Ok(true) {
@@ -54,10 +55,14 @@ async fn main() {
                         },
                         rx_msg = ws.next() => {
                             if rx_msg.is_none() {
+                                println!("websocket dieded");
                                 return;
                             }
                         },
                     };
+
+                    }
+
                 }))
             },
         );
