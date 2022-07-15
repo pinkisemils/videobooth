@@ -79,12 +79,13 @@
     <script language="javascript" type="text/javascript">
 "use strict";
 
-const TIME_LIMIT = 120;
+const TIME_LIMIT = 10;
 const WARMUP = 3;
 const IDLE_MESSAGE = "Press the button to record\nSpiediet pogu lai ierakstītu";
 const REC_MESSAGE = " \n \nPress again to finish recording\nSpiediet atkal lai beigtu ierakstīt";
 const OK_MESSAGE = "Your message has been saved\nJūsu videoieraksts ir saglabāts";
 const WARMUP_MESSAGE = "";
+const REFRESH_TIMEOUT = 120 * 1000;
 
 
 const server = "/recording";
@@ -93,6 +94,7 @@ const ws_path = "ws://127.0.0.1:8080/events";
 
 let webcamstream;
 let recorder;
+let refreshTimeout;
 
 let state = 'idle';
 
@@ -126,11 +128,29 @@ window.addEventListener('keydown', function(e) {
     }
 });
 
+function setupRefreshTimeout() {
+    refreshTimeout = setInterval(function() {
+        console.log("Refreshing page to fix quirks");
+        location.reload();
+    }, REFRESH_TIMEOUT);
+}
+
+function clearRefreshTimeout() {
+    if (refreshTimeout) {
+        clearInterval(refreshTimeout);
+        refreshTimeout = null;
+        console.log("Cleared refresh timeout");
+    }
+}
+
 function buttonPressed() {
     if (state == 'idle') {
+
+
         if (WARMUP < 1) {
             startRecording();
         } else {
+            clearRefreshTimeout();
             state = 'warmup';
             warmupTime = WARMUP;
             warmupInterval = setInterval(function() {
@@ -176,6 +196,7 @@ function setMessageLater(m, t)
 }
 
 function startRecording() {
+    clearRefreshTimeout();
     warmupTimer.textContent = '';
     recorder = new MediaRecorder(webcamstream, {
         videoBitsPerSecond: 10000000,
@@ -220,6 +241,7 @@ function stopRecording()
     if (TIME_LIMIT - recordingTime < 1) {
         recorder.ondataavailable = function(e) {
             console.log('skip due to short time');
+            setupRefreshTimeout();
             state = 'idle';
             setMessage(IDLE_MESSAGE);
         };
@@ -251,6 +273,7 @@ navigator.getUserMedia({audio: true, video: { width: { ideal: 1920 }, height: { 
     //    video.play();
     //}
 }, function(e) { console.log(e); });
+setupRefreshTimeout();
     </script>
 </
 body>
