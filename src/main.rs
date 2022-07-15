@@ -7,25 +7,38 @@ use warp::{self, Filter, Rejection, Reply, Stream};
 
 #[tokio::main]
 async fn main() {
-    let index_path = std::env::args()
-        .skip(1)
+    let mut args = std::env::args().skip(1);
+    let index_path = args
         .next()
         .expect("First argument must be path to index file");
+
+    let serial_path = args
+        .next()
+        .expect("Second argument must be a path to a serial device");
 
     let (button_tx, _button_rx) = tokio::sync::broadcast::channel(1);
     let event_tx = button_tx.clone();
     tokio::spawn(async move {
         // Get tokio's version of stdin, which implements AsyncRead
-        let stdin = tokio::io::stdin();
+        let stdin = match File::open(&serial_path).await {
+            Ok(file) => file,
+            Err(err) => {
+                println!("Failed to open serial device {}: {}", serial_path, err);
+                return;
+            }
+        };
         // Create a buffered wrapper, which implements BufRead
         let reader = BufReader::new(stdin);
         // Take a stream of lines from this
         let mut lines = reader.lines();
-        while let Ok(Some(_next_line)) = lines.next_line().await {
-            println!("Sending button press");
-            let _ = button_tx.send(true);
+        while let Ok(Some(next_line)) = lines.next_line().await {
+            if next_line.starts_with("click") || &serial_path == "/dev/stdin" {
+                println!("Sending button press");
+                let _ = button_tx.send(true);
+            }
         }
     });
+
 
     let receiver = warp::path!("recording")
         .and(warp::filters::path::end())
@@ -35,9 +48,7 @@ async fn main() {
 
     let index = warp::filters::path::end()
         .and(warp::filters::method::get())
-        .and(warp::any().map(move || {
-            index_path.clone()
-        }))
+        .and(warp::any().map(move || index_path.clone()))
         .and_then(index);
 
     let events = warp::path!("events")
@@ -51,26 +62,24 @@ async fn main() {
                 Result::<_, Rejection>::Ok(ws.on_upgrade(move |ws| async move {
                     let mut ws = ws.fuse();
                     loop {
-                    futures::select! {
-                        btn = socket_rx.select_next_some() => {
-                            if btn == Ok(true) {
-                                if let Err(err) = ws.send(warp::ws::Message::text("p")).await {
-                                    println!("websocket failed: {}", err);
+                        futures::select! {
+                            btn = socket_rx.select_next_some() => {
+                                if btn == Ok(true) {
+                                    if let Err(err) = ws.send(warp::ws::Message::text("p")).await {
+                                        println!("websocket failed: {}", err);
+                                        return;
+                                    }
+                                }
+
+                            },
+                            rx_msg = ws.next() => {
+                                if rx_msg.is_none() {
+                                    println!("websocket dieded");
                                     return;
                                 }
-                            }
-
-                        },
-                        rx_msg = ws.next() => {
-                            if rx_msg.is_none() {
-                                println!("websocket dieded");
-                                return;
-                            }
-                        },
-                    };
-
+                            },
+                        };
                     }
-
                 }))
             },
         );
@@ -84,9 +93,7 @@ async fn main() {
 
 async fn index(path: String) -> Result<impl Reply, Rejection> {
     Ok(warp::reply::html(
-        tokio::fs::read(&path)
-            .await
-            .map_err(io_rejection)?,
+        tokio::fs::read(&path).await.map_err(io_rejection)?,
     ))
 }
 
