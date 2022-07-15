@@ -243,7 +243,7 @@ document.querySelector('#main').onclick = function(e) {
     document.querySelector('#main').requestFullscreen();
 };
 
-navigator.getUserMedia({audio: true, video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60 } } }, function(stream) {
+navigator.getUserMedia({audio: true, video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } } }, function(stream) {
     let video = document.querySelector('video');
     webcamstream = stream;
     video.srcObject = stream;
